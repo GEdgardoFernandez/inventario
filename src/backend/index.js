@@ -43,3 +43,53 @@ app.delete('/productos/:id', (req, res) => {
 // Iniciar el servidor
 const PORT = 3001;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
+
+// Login de prueba
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === 'guille' && password === 'admin') {
+        res.json({ message: 'Inicio de sesión exitoso' });
+    } else {
+        res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+});
+
+//crear usuario
+app.post('/usuarios', (req, res) => {
+    const { username, password, rol } = req.body;
+    db.run("INSERT INTO usuarios (nombre, password, rol) VALUES (?, ?)", [username, password, rol], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID, username, password, rol });
+    });
+});
+
+//Proveedores
+app.get('/proveedores', (req, res) => {
+    db.all("SELECT * FROM proveedores", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/proveedores', (req, res) => {
+    const { nombre, direccion, telefono } = req.body;
+    db.run("INSERT INTO proveedores (nombre, direccion, telefono) VALUES (?, ?, ?)", [nombre, direccion, telefono], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID, nombre, direccion, telefono });
+    });
+});
+
+app.put('/proveedores/:id', (req, res) => {
+    const { nombre, direccion, telefono } = req.body;
+    db.run("UPDATE proveedores SET nombre = ?, direccion = ?, telefono = ? WHERE id = ?", [nombre, direccion, telefono, req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: "Proveedor actualizado", changes: this.changes });
+    });
+});
+
+app.delete('/proveedores/:id', (req, res) => {
+    db.run("DELETE FROM proveedores WHERE id = ?", [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: "Proveedor eliminado", changes: this.changes });
+    });
+});
