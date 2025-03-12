@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const db = require('./database');
+const bcrypt = require("bcrypt");
 
 const app = express();
 app.use(cors());
@@ -44,25 +45,65 @@ app.delete('/productos/:id', (req, res) => {
 const PORT = 3001;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
 
-// Login de prueba
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    if (username === 'guille' && password === 'admin') {
-        res.json({ message: 'Inicio de sesión exitoso' });
-    } else {
-        res.status(401).json({ error: 'Credenciales incorrectas' });
-    }
-});
 
-//crear usuario
-app.post('/usuarios', (req, res) => {
-    const { username, password, rol } = req.body;
-    db.run("INSERT INTO usuarios (nombre, password, rol) VALUES (?, ?)", [username, password, rol], function(err) {
+    db.get("SELECT * FROM usuarios WHERE nombre = ?", [username], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID, username, password, rol });
+
+        if (!user) {
+            return res.status(401).json({ error: "Usuario no encontrado" });
+        }
+
+        // Verifica la contraseña con bcrypt
+        bcrypt.compare(password, user.password, (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            if (result) {
+                return res.json({ message: "Login exitoso", user: { id: user.id, username: user.nombre, rol: user.rol } });
+            } else {
+                return res.status(401).json({ error: "Contraseña incorrecta" });
+            }
+        });
     });
 });
 
+
+// Crear usuario con contraseña encriptada
+app.post("/usuarios", async (req, res) => {
+    try {
+        const { username, password, rol } = req.body;
+
+        // Validar que todos los campos están presentes
+        if (!username || !password || !rol) {
+            return res.status(400).json({ error: "Faltan datos obligatorios" });
+        }
+
+        // Validar que el rol sea correcto
+        if (!["admin", "empleado"].includes(rol)) {
+            return res.status(400).json({ error: "Rol no válido. Debe ser 'admin' o 'empleado'" });
+        }
+
+        // Encriptar la contraseña antes de guardarla
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insertar en la base de datos
+        db.run(
+            "INSERT INTO usuarios (nombre, password, rol) VALUES (?, ?, ?)", // Ahora tiene 3 "?"
+            [username, hashedPassword, rol],
+            function (err) {
+                if (err) {
+                    console.error("Error al insertar usuario:", err);
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ id: this.lastID, username, rol });
+            }
+        );
+    } catch (error) {
+        console.error("Error en la creación del usuario:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
 //Proveedores
 app.get('/proveedores', (req, res) => {
     db.all("SELECT * FROM proveedores", [], (err, rows) => {
